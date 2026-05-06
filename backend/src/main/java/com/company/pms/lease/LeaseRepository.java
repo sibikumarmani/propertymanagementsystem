@@ -8,6 +8,7 @@ import java.util.Optional;
 public interface LeaseRepository extends JpaRepository<LeaseEntity, Long> {
 
     List<LeaseEntity> findAllByCompanyIdOrderByLeaseNumberAscIdAsc(Long companyId);
+    List<LeaseEntity> findAllByCompanyIdAndLeaseEndDateBetweenAndStatusInOrderByLeaseEndDateAscIdAsc(Long companyId, java.time.LocalDate startDate, java.time.LocalDate endDate, List<String> statuses);
 
     Optional<LeaseEntity> findByIdAndCompanyId(Long id, Long companyId);
 

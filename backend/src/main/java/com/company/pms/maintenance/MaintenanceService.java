@@ -2,6 +2,7 @@ package com.company.pms.maintenance;
 
 import com.company.pms.auth.UserEntity;
 import com.company.pms.auth.UserRepository;
+import com.company.pms.notification.NotificationService;
 import com.company.pms.property.PropertyEntity;
 import com.company.pms.property.PropertyRepository;
 import com.company.pms.security.SecurityContextService;
@@ -54,6 +55,7 @@ public class MaintenanceService {
     private final VendorRepository vendorRepository;
     private final UserRepository userRepository;
     private final SecurityContextService securityContextService;
+    private final NotificationService notificationService;
     private final ObjectMapper objectMapper;
 
     public MaintenanceService(
@@ -66,6 +68,7 @@ public class MaintenanceService {
         VendorRepository vendorRepository,
         UserRepository userRepository,
         SecurityContextService securityContextService,
+        NotificationService notificationService,
         ObjectMapper objectMapper
     ) {
         this.requestRepository = requestRepository;
@@ -77,6 +80,7 @@ public class MaintenanceService {
         this.vendorRepository = vendorRepository;
         this.userRepository = userRepository;
         this.securityContextService = securityContextService;
+        this.notificationService = notificationService;
         this.objectMapper = objectMapper;
     }
 
@@ -122,6 +126,7 @@ public class MaintenanceService {
         VendorEntity vendor = request.assignedVendorId() == null ? null : requireVendor(request.assignedVendorId(), companyId);
         UserEntity assignedUser = request.assignedUserId() == null ? null : requireUser(request.assignedUserId());
         MaintenanceRequestEntity saved = requestRepository.save(apply(entity, request, companyId, requestNumber));
+        notificationService.sendWorkflowNotification(companyId, "MAINTENANCE_STATUS_UPDATE", "Maintenance request updated", "Maintenance request %s is now %s.".formatted(saved.getRequestNumber(), saved.getStatus()), "MAINTENANCE_REQUEST", saved.getId(), "NORMAL");
         return toDto(saved, tenant, property, unit, vendor, assignedUser);
     }
 
@@ -164,6 +169,7 @@ public class MaintenanceService {
         VendorEntity vendor = request.vendorId() == null ? null : requireVendor(request.vendorId(), companyId);
         UserEntity user = request.technicianUserId() == null ? null : requireUser(request.technicianUserId());
         MaintenanceWorkOrderEntity saved = workOrderRepository.save(apply(entity, request, companyId, number));
+        notificationService.sendWorkflowNotification(companyId, "MAINTENANCE_STATUS_UPDATE", "Work order updated", "Work order %s is now %s.".formatted(saved.getWorkOrderNumber(), saved.getStatus()), "MAINTENANCE_WORK_ORDER", saved.getId(), "NORMAL");
         return toDto(saved, maintenanceRequest, vendor, user);
     }
 

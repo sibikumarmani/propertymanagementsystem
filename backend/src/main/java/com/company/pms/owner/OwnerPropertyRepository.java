@@ -10,5 +10,7 @@ public interface OwnerPropertyRepository extends JpaRepository<OwnerPropertyEnti
 
     List<OwnerPropertyEntity> findAllByOwnerIdIn(List<Long> ownerIds);
 
+    List<OwnerPropertyEntity> findAllByPropertyIdIn(List<Long> propertyIds);
+
     void deleteAllByOwnerId(Long ownerId);
 }

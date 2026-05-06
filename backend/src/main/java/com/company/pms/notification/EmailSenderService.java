@@ -80,6 +80,28 @@ public class EmailSenderService {
         }
     }
 
+    public DeliveryResult sendNotification(String toEmail, String subject, String body) {
+        JavaMailSender mailSender = mailSenderProvider.getIfAvailable();
+        if (mailSender == null) {
+            log.warn("SMTP is not configured. Notification for {}: {}", toEmail, subject);
+            return new DeliveryResult(false, "SMTP is not configured. Notification was logged on the server.", null);
+        }
+
+        SimpleMailMessage message = new SimpleMailMessage();
+        message.setFrom(fromAddress);
+        message.setTo(toEmail);
+        message.setSubject(subject);
+        message.setText(body);
+
+        try {
+            mailSender.send(message);
+            return new DeliveryResult(true, "Notification email sent", null);
+        } catch (MailException ex) {
+            log.warn("Notification email delivery failed for {}", toEmail, ex);
+            return new DeliveryResult(false, "Notification email delivery failed.", null);
+        }
+    }
+
     public record DeliveryResult(boolean delivered, String message, String verificationCode) {
     }
 }

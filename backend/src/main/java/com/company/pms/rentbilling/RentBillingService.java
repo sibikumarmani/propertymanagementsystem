@@ -2,6 +2,8 @@ package com.company.pms.rentbilling;
 
 import com.company.pms.lease.LeaseEntity;
 import com.company.pms.lease.LeaseRepository;
+import com.company.pms.notification.NotificationService;
+import com.company.pms.audit.AuditLogService;
 import com.company.pms.property.PropertyEntity;
 import com.company.pms.property.PropertyRepository;
 import com.company.pms.security.SecurityContextService;
@@ -42,6 +44,8 @@ public class RentBillingService {
     private final PropertyRepository propertyRepository;
     private final UnitRepository unitRepository;
     private final SecurityContextService securityContextService;
+    private final NotificationService notificationService;
+    private final AuditLogService auditLogService;
 
     public RentBillingService(
         RentScheduleRepository rentScheduleRepository,
@@ -53,7 +57,9 @@ public class RentBillingService {
         TenantRepository tenantRepository,
         PropertyRepository propertyRepository,
         UnitRepository unitRepository,
-        SecurityContextService securityContextService
+        SecurityContextService securityContextService,
+        NotificationService notificationService,
+        AuditLogService auditLogService
     ) {
         this.rentScheduleRepository = rentScheduleRepository;
         this.invoiceRepository = invoiceRepository;
@@ -65,6 +71,8 @@ public class RentBillingService {
         this.propertyRepository = propertyRepository;
         this.unitRepository = unitRepository;
         this.securityContextService = securityContextService;
+        this.notificationService = notificationService;
+        this.auditLogService = auditLogService;
     }
 
     @Transactional(readOnly = true)
@@ -302,7 +310,9 @@ public class RentBillingService {
 
     @Transactional
     public InvoiceDto approveInvoice(Long id) {
-        return updateInvoiceStatus(id, "APPROVED");
+        InvoiceDto invoice = updateInvoiceStatus(id, "APPROVED");
+        notificationService.sendWorkflowNotification(invoice.companyId(), "APPROVAL_NOTIFICATION", "Invoice approved", "Invoice %s has been approved.".formatted(invoice.invoiceNumber()), "INVOICE", invoice.id(), "NORMAL");
+        return invoice;
     }
 
     @Transactional
@@ -350,7 +360,10 @@ public class RentBillingService {
         receipt.setRemarks(normalizeText(request.remarks()));
         receipt.setPdfDocument(request.pdfDocument());
         receipt.setStatus("POSTED");
-        return toReceiptDto(receiptRepository.save(receipt));
+        ReceiptDto saved = toReceiptDto(receiptRepository.save(receipt));
+        auditLogService.log("Payment received", "Rent & Billing", "RECEIPT", saved.id(), null, saved);
+        notificationService.sendWorkflowNotification(companyId, "PAYMENT_CONFIRMATION", "Payment received", "Receipt %s was posted for amount %s.".formatted(saved.receiptNumber(), saved.amount()), "RECEIPT", saved.id(), "NORMAL");
+        return saved;
     }
 
     private InvoiceDto updateInvoiceStatus(Long id, String status) {
@@ -359,8 +372,13 @@ public class RentBillingService {
         if ("CANCELLED".equals(invoice.getStatus()) || "PAID".equals(invoice.getStatus())) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Paid or cancelled invoices cannot be changed");
         }
+        String oldStatus = invoice.getStatus();
         invoice.setStatus(status);
-        return toInvoiceDto(invoiceRepository.save(invoice));
+        InvoiceDto saved = toInvoiceDto(invoiceRepository.save(invoice));
+        if ("CANCELLED".equals(status)) {
+            auditLogService.log("Invoice cancelled", "Rent & Billing", "INVOICE", saved.id(), "status=" + oldStatus, saved);
+        }
+        return saved;
     }
 
     private void applyInvoice(InvoiceEntity invoice, InvoiceUpsertRequest request, Long companyId, String invoiceNumber, Long tenantId) {

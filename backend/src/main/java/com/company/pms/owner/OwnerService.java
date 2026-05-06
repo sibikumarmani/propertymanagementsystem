@@ -231,12 +231,18 @@ public class OwnerService {
 
     private void replaceOwnerProperties(Long ownerId, List<PropertyEntity> properties) {
         ownerPropertyRepository.deleteAllByOwnerId(ownerId);
-        ownerPropertyRepository.saveAll(properties.stream()
+        ownerPropertyRepository.flush();
+
+        List<OwnerPropertyEntity> ownerProperties = properties.stream()
+            .collect(Collectors.toMap(PropertyEntity::getId, property -> property, (left, right) -> left, LinkedHashMap::new))
+            .values()
+            .stream()
             .map(property -> OwnerPropertyEntity.builder()
                 .ownerId(ownerId)
                 .propertyId(property.getId())
                 .build())
-            .toList());
+            .toList();
+        ownerPropertyRepository.saveAll(ownerProperties);
     }
 
     private Map<Long, PropertyEntity> loadPropertiesById(List<Long> propertyIds) {

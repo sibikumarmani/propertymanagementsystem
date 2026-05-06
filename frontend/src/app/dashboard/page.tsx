@@ -1,322 +1,212 @@
 "use client";
 
 import axios from "axios";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { DataTable } from "@/components/common/data-table";
 import { SectionCard } from "@/components/common/section-card";
 import { StatCard } from "@/components/common/stat-card";
 import { AppShell } from "@/components/layout/app-shell";
-import { ownerApi, propertyApi, tenantApi, unitApi, vendorApi } from "@/lib/api";
-import type { DashboardMetric, OwnerRecord, PropertyRecord, TenantRecord, UnitRecord, VendorRecord } from "@/lib/types";
+import { accountingApi, approvalApi, documentApi, leaseApi, maintenanceApi, notificationApi, ownerApi, propertyApi, rentBillingApi, tenantApi, unitApi } from "@/lib/api";
+import type { AccountingEntryRecord, ApprovalRequestRecord, DocumentRecord, InvoiceRecord, LeaseRecord, MaintenanceRequestRecord, NotificationRecord, OwnerRecord, PropertyRecord, ReceiptRecord, TenantRecord, UnitRecord } from "@/lib/types";
 import { useIsClient } from "@/hooks/use-is-client";
 import { useAppStore } from "@/store/app-store";
 
 function readError(error: unknown, fallback: string) {
-  if (axios.isAxiosError(error) && typeof error.response?.data?.message === "string") {
-    return error.response.data.message;
-  }
+  if (axios.isAxiosError(error) && typeof error.response?.data?.message === "string") return error.response.data.message;
   return fallback;
 }
+function id(value: string | number | null | undefined) { return value == null ? null : String(value); }
+function count(value: number) { return new Intl.NumberFormat("en-US").format(value); }
+function money(value: number) { return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 }).format(value); }
+function sameEmail(a?: string | null, b?: string | null) { return !!a && !!b && a.toLowerCase() === b.toLowerCase(); }
+function isOpen(status?: string | null) { return !!status && !["CLOSED", "COMPLETED", "CANCELLED", "PAID", "APPROVED"].includes(status); }
 
-function formatCount(value: number) {
-  return new Intl.NumberFormat("en-US").format(value);
-}
+type DashboardData = {
+  properties: PropertyRecord[];
+  units: UnitRecord[];
+  tenants: TenantRecord[];
+  owners: OwnerRecord[];
+  leases: LeaseRecord[];
+  invoices: InvoiceRecord[];
+  receipts: ReceiptRecord[];
+  maintenance: MaintenanceRequestRecord[];
+  documents: DocumentRecord[];
+  notifications: NotificationRecord[];
+  approvals: ApprovalRequestRecord[];
+  accounting: AccountingEntryRecord[];
+};
 
-function formatCurrency(value: number) {
-  return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 }).format(value);
-}
+const emptyData: DashboardData = { properties: [], units: [], tenants: [], owners: [], leases: [], invoices: [], receipts: [], maintenance: [], documents: [], notifications: [], approvals: [], accounting: [] };
 
-function toRecordArray<T extends { id: string }>(items: T[], limit = 5) {
-  return items.slice(0, limit);
+async function safeData<T>(request: Promise<{ data: { data: T } }>, fallback: T): Promise<T> {
+  try {
+    const response = await request;
+    return response.data.data;
+  } catch {
+    return fallback;
+  }
 }
 
 export default function DashboardPage() {
   const isClient = useIsClient();
-  const { accessToken, hasHydrated } = useAppStore();
-  const [properties, setProperties] = useState<PropertyRecord[]>([]);
-  const [units, setUnits] = useState<UnitRecord[]>([]);
-  const [tenants, setTenants] = useState<TenantRecord[]>([]);
-  const [vendors, setVendors] = useState<VendorRecord[]>([]);
-  const [owners, setOwners] = useState<OwnerRecord[]>([]);
+  const { accessToken, hasHydrated, user } = useAppStore();
+  const [data, setData] = useState<DashboardData>(emptyData);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  const roles = user?.roles ?? [];
+  const isTenant = roles.some((role) => role.toUpperCase().includes("TENANT"));
+  const isOwner = roles.some((role) => role.toUpperCase().includes("OWNER"));
+  const userEmail = user?.email ?? null;
+
+  const loadAll = useCallback(async () => {
+    const [properties, units, tenants, owners, leases, invoices, receipts, maintenance, documents, notifications, approvals, accounting] = await Promise.all([
+      safeData(propertyApi.getProperties(), []),
+      safeData(unitApi.getUnits(), []),
+      safeData(tenantApi.getTenants(), []),
+      safeData(ownerApi.getOwners(), []),
+      safeData(leaseApi.getLeases(), []),
+      safeData(rentBillingApi.getInvoices(), []),
+      safeData(rentBillingApi.getReceipts(), []),
+      safeData(maintenanceApi.getRequests(), []),
+      safeData(documentApi.getDocuments(), []),
+      safeData(notificationApi.getMyNotifications(), []),
+      safeData(approvalApi.getRequests(), []),
+      safeData(accountingApi.getEntries(), []),
+    ]);
+    setData({
+      properties: (properties as Array<PropertyRecord & { id: number | string }>).map((item) => ({ ...item, id: String(item.id), companyId: String(item.companyId), branchId: id(item.branchId), propertyManagerUserId: id(item.propertyManagerUserId), documentAttachments: item.documentAttachments ?? [] })),
+      units: (units as Array<UnitRecord & { id: number | string }>).map((item) => ({ ...item, id: String(item.id), companyId: String(item.companyId), propertyId: String(item.propertyId), buildingId: String(item.buildingId), floorId: String(item.floorId), photoAttachments: item.photoAttachments ?? [], documentAttachments: item.documentAttachments ?? [] })),
+      tenants: (tenants as Array<TenantRecord & { id: number | string }>).map((item) => ({ ...item, id: String(item.id), companyId: String(item.companyId) })),
+      owners: (owners as Array<OwnerRecord & { id: number | string; propertyIds: Array<number | string> }>).map((item) => ({ ...item, id: String(item.id), companyId: String(item.companyId), propertyIds: item.propertyIds.map(String) })),
+      leases: (leases as Array<LeaseRecord & { id: number | string }>).map((item) => ({ ...item, id: String(item.id), companyId: String(item.companyId), tenantId: String(item.tenantId), propertyId: String(item.propertyId), unitId: String(item.unitId), renewedFromLeaseId: id(item.renewedFromLeaseId) })),
+      invoices: (invoices as Array<InvoiceRecord & { id: number | string }>).map((item) => ({ ...item, id: String(item.id), companyId: String(item.companyId), tenantId: String(item.tenantId), leaseId: id(item.leaseId), rentScheduleId: id(item.rentScheduleId), propertyId: id(item.propertyId), unitId: id(item.unitId) })),
+      receipts: (receipts as Array<ReceiptRecord & { id: number | string }>).map((item) => ({ ...item, id: String(item.id), companyId: String(item.companyId), tenantId: String(item.tenantId), invoiceId: id(item.invoiceId) })),
+      maintenance: (maintenance as Array<MaintenanceRequestRecord & { id: number | string }>).map((item) => ({ ...item, id: String(item.id), companyId: String(item.companyId), tenantId: String(item.tenantId), propertyId: String(item.propertyId), unitId: String(item.unitId), assignedVendorId: id(item.assignedVendorId), assignedUserId: id(item.assignedUserId), attachments: item.attachments ?? [] })),
+      documents: (documents as Array<DocumentRecord & { id: number | string }>).map((item) => ({ ...item, id: String(item.id), companyId: String(item.companyId), propertyId: id(item.propertyId), unitId: id(item.unitId), tenantId: id(item.tenantId), leaseId: id(item.leaseId), vendorId: id(item.vendorId), invoiceId: id(item.invoiceId), previousDocumentId: id(item.previousDocumentId) })),
+      notifications: (notifications as Array<NotificationRecord & { id: number | string }>).map((item) => ({ ...item, id: String(item.id), companyId: String(item.companyId), recipientUserId: id(item.recipientUserId), entityId: id(item.entityId), deliveries: item.deliveries ?? [] })),
+      approvals: (approvals as Array<ApprovalRequestRecord & { id: number | string }>).map((item) => ({ ...item, id: String(item.id), companyId: String(item.companyId), entityId: String(item.entityId), requestedBy: id(item.requestedBy), history: item.history ?? [] })),
+      accounting: (accounting as Array<AccountingEntryRecord & { id: number | string }>).map((item) => ({ ...item, id: String(item.id), companyId: String(item.companyId), partyId: id(item.partyId), propertyId: id(item.propertyId), unitId: id(item.unitId), sourceId: String(item.sourceId) })),
+    });
+  }, []);
+
   useEffect(() => {
-    if (!isClient || !hasHydrated || !accessToken) {
-      return;
-    }
+    if (!isClient || !hasHydrated || !accessToken) return;
     let cancelled = false;
     async function run() {
       try {
         setIsLoading(true);
-        const [propertyResponse, unitResponse, tenantResponse, vendorResponse, ownerResponse] = await Promise.all([
-          propertyApi.getProperties(),
-          unitApi.getUnits(),
-          tenantApi.getTenants(),
-          vendorApi.getVendors(),
-          ownerApi.getOwners(),
-        ]);
-        if (cancelled) {
-          return;
-        }
-
-        setProperties((propertyResponse.data.data as Array<PropertyRecord & { id: number | string; companyId: number | string; branchId: number | string | null; propertyManagerUserId: number | string | null }>).map((property) => ({
-          ...property,
-          id: String(property.id),
-          companyId: String(property.companyId),
-          branchId: property.branchId == null ? null : String(property.branchId),
-          propertyManagerUserId: property.propertyManagerUserId == null ? null : String(property.propertyManagerUserId),
-          documentAttachments: Array.isArray(property.documentAttachments) ? property.documentAttachments : [],
-        })));
-        setUnits((unitResponse.data.data as Array<UnitRecord & {
-          id: number | string;
-          companyId: number | string;
-          propertyId: number | string;
-          buildingId: number | string;
-          floorId: number | string;
-        }>).map((unit) => ({
-          ...unit,
-          id: String(unit.id),
-          companyId: String(unit.companyId),
-          propertyId: String(unit.propertyId),
-          buildingId: String(unit.buildingId),
-          floorId: String(unit.floorId),
-          photoAttachments: Array.isArray(unit.photoAttachments) ? unit.photoAttachments : [],
-          documentAttachments: Array.isArray(unit.documentAttachments) ? unit.documentAttachments : [],
-        })));
-        setTenants(
-          (tenantResponse.data.data as Array<Omit<TenantRecord, "id" | "companyId"> & { id: number | string; companyId: number | string }>).map((tenant) => ({
-            ...tenant,
-            id: String(tenant.id),
-            companyId: String(tenant.companyId),
-          })),
-        );
-        setVendors(
-          (vendorResponse.data.data as Array<Omit<VendorRecord, "id" | "companyId"> & { id: number | string; companyId: number | string }>).map((vendor) => ({
-            ...vendor,
-            id: String(vendor.id),
-            companyId: String(vendor.companyId),
-          })),
-        );
-        setOwners(
-          (ownerResponse.data.data as Array<Omit<OwnerRecord, "id" | "companyId" | "propertyIds"> & {
-            id: number | string;
-            companyId: number | string;
-            propertyIds: Array<number | string>;
-          }>).map((owner) => ({
-            ...owner,
-            id: String(owner.id),
-            companyId: String(owner.companyId),
-            propertyIds: owner.propertyIds.map((item) => String(item)),
-          })),
-        );
-        setError(null);
-      } catch (loadError: unknown) {
-        if (!cancelled) {
-          setError(readError(loadError, "Dashboard data could not be loaded."));
-        }
+        await loadAll();
+        if (!cancelled) setError(null);
+      } catch (loadError) {
+        if (!cancelled) setError(readError(loadError, "Dashboard data could not be loaded."));
       } finally {
-        if (!cancelled) {
-          setIsLoading(false);
-        }
+        if (!cancelled) setIsLoading(false);
       }
     }
     void run();
-    return () => {
-      cancelled = true;
-    };
-  }, [accessToken, hasHydrated, isClient]);
+    return () => { cancelled = true; };
+  }, [accessToken, hasHydrated, isClient, loadAll]);
 
-  const propertyManagerMetrics = useMemo<DashboardMetric[]>(() => {
-    const totalProperties = properties.length;
-    const totalUnits = units.length;
-    const occupiedUnits = units.filter((unit) => unit.unitStatus === "OCCUPIED").length;
-    const vacantUnits = units.filter((unit) => unit.unitStatus === "AVAILABLE").length;
-    const occupancyPercentage = totalUnits === 0 ? 0 : Math.round((occupiedUnits / totalUnits) * 100);
-    const reservedUnits = units.filter((unit) => unit.unitStatus === "RESERVED").length;
-    const openMaintenanceRequests = units.filter((unit) => unit.unitStatus === "UNDER_MAINTENANCE").length;
-    const overdueRent = tenants.filter((tenant) => tenant.tenantStatus === "ACTIVE" && tenant.kycStage !== "APPROVED").length;
-    const moveIns = units.filter((unit) => unit.unitStatus === "OCCUPIED").length;
-    const blockedUnits = units.filter((unit) => unit.unitStatus === "BLOCKED").length;
+  const currentTenant = useMemo(() => data.tenants.find((tenant) => sameEmail(tenant.email, userEmail)) ?? null, [data.tenants, userEmail]);
+  const currentOwner = useMemo(() => data.owners.find((owner) => sameEmail(owner.email, userEmail)) ?? null, [data.owners, userEmail]);
+  const ownerPropertyIds = currentOwner?.propertyIds ?? [];
 
+  const today = useMemo(() => new Date(), []);
+  const leaseAlertDate = useMemo(() => new Date(today.getTime() + 30 * 86400000), [today]);
+  const month = today.getMonth();
+  const year = today.getFullYear();
+  const inThisMonth = useCallback((date: string) => {
+    const parsed = new Date(date);
+    return parsed.getMonth() === month && parsed.getFullYear() === year;
+  }, [month, year]);
+
+  const adminMetrics = useMemo(() => {
+    const totalUnits = data.units.length;
+    const occupied = data.units.filter((unit) => unit.unitStatus === "OCCUPIED").length;
+    const available = data.units.filter((unit) => unit.unitStatus === "AVAILABLE").length;
+    const collection = data.receipts.filter((receipt) => inThisMonth(receipt.receiptDate)).reduce((sum, receipt) => sum + receipt.amount, 0);
+    const pendingRent = data.invoices.filter((invoice) => !["PAID", "CANCELLED"].includes(invoice.status)).reduce((sum, invoice) => sum + invoice.dueAmount, 0);
+    const overdue = data.invoices.filter((invoice) => invoice.status === "OVERDUE" || (invoice.dueAmount > 0 && new Date(invoice.dueDate) < today)).length;
+    const expiring = data.leases.filter((lease) => ["ACTIVE", "APPROVED"].includes(lease.status) && new Date(lease.leaseEndDate) <= leaseAlertDate).length;
     return [
-      { label: "Total properties", value: formatCount(totalProperties), change: "Portfolio", tone: "success" },
-      { label: "Total units", value: formatCount(totalUnits), change: "Inventory", tone: "success" },
-      { label: "Occupied units", value: formatCount(occupiedUnits), change: "Live", tone: "success" },
-      { label: "Vacant units", value: formatCount(vacantUnits), change: "Available", tone: vacantUnits > 0 ? "warning" : "success" },
-      { label: "Occupancy percentage", value: `${occupancyPercentage}%`, change: "Utilization", tone: occupancyPercentage >= 85 ? "success" : "warning" },
-      { label: "Reserved units", value: formatCount(reservedUnits), change: "Pipeline", tone: reservedUnits > 0 ? "warning" : "success" },
-      { label: "Open maintenance requests", value: formatCount(openMaintenanceRequests), change: "Tickets", tone: openMaintenanceRequests > 0 ? "warning" : "success" },
-      { label: "Overdue rent", value: formatCount(overdueRent), change: "Follow-up", tone: overdueRent > 0 ? "danger" : "success" },
-      { label: "Move-ins this month", value: formatCount(moveIns), change: "Derived", tone: "success" },
-      { label: "Blocked units", value: formatCount(blockedUnits), change: "Held stock", tone: blockedUnits > 0 ? "warning" : "success" },
+      { label: "Total properties", value: count(data.properties.length), change: "Portfolio", tone: "success" as const },
+      { label: "Total units", value: count(totalUnits), change: "Inventory", tone: "success" as const },
+      { label: "Occupied units", value: count(occupied), change: "Live", tone: "success" as const },
+      { label: "Available units", value: count(available), change: "Ready", tone: available > 0 ? "warning" as const : "success" as const },
+      { label: "Occupancy percentage", value: `${totalUnits ? Math.round((occupied / totalUnits) * 100) : 0}%`, change: "Utilization", tone: "success" as const },
+      { label: "Monthly rent collection", value: money(collection), change: "This month", tone: "success" as const },
+      { label: "Pending rent", value: money(pendingRent), change: "Receivable", tone: pendingRent > 0 ? "warning" as const : "success" as const },
+      { label: "Overdue invoices", value: count(overdue), change: "Follow-up", tone: overdue > 0 ? "danger" as const : "success" as const },
+      { label: "Open maintenance requests", value: count(data.maintenance.filter((item) => isOpen(item.status)).length), change: "Tickets", tone: "warning" as const },
+      { label: "Lease expiry alerts", value: count(expiring), change: "30 days", tone: expiring > 0 ? "warning" as const : "success" as const },
+      { label: "Pending approvals", value: count(data.approvals.filter((item) => ["PENDING", "RESUBMITTED"].includes(item.status)).length), change: "Workflow", tone: "warning" as const },
     ];
-  }, [properties, tenants, units]);
+  }, [data, inThisMonth, leaseAlertDate, today]);
 
-  const leasingMetrics = useMemo<DashboardMetric[]>(() => {
-    const availableUnits = units.filter((unit) => unit.unitStatus === "AVAILABLE").length;
-    const reservedUnits = units.filter((unit) => unit.unitStatus === "RESERVED").length;
-    const approvedTenants = tenants.filter((tenant) => tenant.tenantStatus === "APPROVED").length;
-    const leaseDraftsPending = units.filter((unit) => unit.unitStatus === "BLOCKED").length;
-    const activeLeases = units.filter((unit) => unit.unitStatus === "OCCUPIED").length;
-    const conversionBase = reservedUnits + approvedTenants + activeLeases;
-    const conversionRate = conversionBase === 0 ? 0 : Math.round((activeLeases / conversionBase) * 100);
-    const inactiveUnits = units.filter((unit) => unit.unitStatus === "INACTIVE").length;
+  const tenantLeases = currentTenant ? data.leases.filter((lease) => lease.tenantId === currentTenant.id) : [];
+  const currentLease = tenantLeases.find((lease) => lease.status === "ACTIVE") ?? tenantLeases[0] ?? null;
+  const tenantInvoices = currentTenant ? data.invoices.filter((invoice) => invoice.tenantId === currentTenant.id) : [];
+  const tenantReceipts = currentTenant ? data.receipts.filter((receipt) => receipt.tenantId === currentTenant.id) : [];
+  const tenantMaintenance = currentTenant ? data.maintenance.filter((item) => item.tenantId === currentTenant.id) : [];
+  const tenantDocuments = currentTenant ? data.documents.filter((document) => document.tenantId === currentTenant.id || (currentLease && document.leaseId === currentLease.id)) : [];
 
-    return [
-      { label: "Available units", value: formatCount(availableUnits), change: "Supply", tone: "success" },
-      { label: "Reserved units", value: formatCount(reservedUnits), change: "Reserved", tone: "warning" },
-      { label: "Approved tenants", value: formatCount(approvedTenants), change: "Ready", tone: "success" },
-      { label: "Active leases", value: formatCount(activeLeases), change: "Occupied", tone: "success" },
-      { label: "Lease drafts pending", value: formatCount(leaseDraftsPending), change: "Drafts", tone: "warning" },
-      { label: "Lease occupancy conversion", value: `${conversionRate}%`, change: "Derived", tone: conversionRate >= 50 ? "success" : "warning" },
-      { label: "Inactive units", value: formatCount(inactiveUnits), change: "Unavailable", tone: inactiveUnits > 0 ? "danger" : "success" },
-    ];
-  }, [tenants, units]);
-
-  const financeMetrics = useMemo<DashboardMetric[]>(() => {
-    const rentBilled = units.reduce((sum, unit) => sum + Number(unit.baseRent ?? 0), 0);
-    const occupiedRent = units.filter((unit) => unit.unitStatus === "OCCUPIED").reduce((sum, unit) => sum + Number(unit.baseRent ?? 0), 0);
-    const outstandingReceivables = units.filter((unit) => unit.unitStatus !== "OCCUPIED").reduce((sum, unit) => sum + Number(unit.baseRent ?? 0), 0);
-    const overdueAmount = tenants.filter((tenant) => tenant.tenantStatus === "ACTIVE" && tenant.kycStage !== "APPROVED").length * 1000;
-    const securityDepositBalance = units.reduce((sum, unit) => sum + Number(unit.securityDepositAmount ?? 0), 0);
-    const vendorPayables = vendors.filter((vendor) => vendor.assignmentStage !== "PAYMENT_PROCESSED").length * 1500;
-    const ownerPayables = owners.filter((owner) => owner.statementStage !== "OWNER_PAYMENT_PROCESSED").length * 2000;
-    const monthlyIncome = occupiedRent;
-    const monthlyExpenses = units.filter((unit) => unit.unitStatus === "UNDER_MAINTENANCE").length * 500 + vendors.length * 250;
-
-    return [
-      { label: "Rent billed", value: formatCurrency(rentBilled), change: "Derived", tone: "success" },
-      { label: "Rent collected", value: formatCurrency(occupiedRent), change: "Occupied", tone: "success" },
-      { label: "Outstanding receivables", value: formatCurrency(outstandingReceivables), change: "Open", tone: outstandingReceivables > 0 ? "warning" : "success" },
-      { label: "Overdue amount", value: formatCurrency(overdueAmount), change: "Follow-up", tone: overdueAmount > 0 ? "danger" : "success" },
-      { label: "Security deposit balance", value: formatCurrency(securityDepositBalance), change: "Held", tone: "success" },
-      { label: "Vendor payables", value: formatCurrency(vendorPayables), change: "Workflow", tone: vendorPayables > 0 ? "warning" : "success" },
-      { label: "Owner payables", value: formatCurrency(ownerPayables), change: "Statements", tone: ownerPayables > 0 ? "warning" : "success" },
-      { label: "Monthly income", value: formatCurrency(monthlyIncome), change: "Derived", tone: "success" },
-      { label: "Monthly expenses", value: formatCurrency(monthlyExpenses), change: "Derived", tone: monthlyExpenses > monthlyIncome ? "danger" : "warning" },
-    ];
-  }, [owners, tenants, units, vendors]);
-
-  const maintenanceMetrics = useMemo<DashboardMetric[]>(() => {
-    const openTickets = units.filter((unit) => unit.unitStatus === "UNDER_MAINTENANCE").length;
-    const emergencyTickets = Math.min(openTickets, vendors.filter((vendor) => vendor.serviceCategory?.toLowerCase().includes("emergency")).length);
-    const workOrdersInProgress = vendors.filter((vendor) => ["WORK_ORDER_SENT", "VENDOR_ACCEPTED"].includes(vendor.assignmentStage)).length;
-    const completedWorkOrders = vendors.filter((vendor) => ["WORK_COMPLETED", "INVOICE_SUBMITTED", "MANAGER_VERIFIED", "PAYMENT_PROCESSED"].includes(vendor.assignmentStage)).length;
-    const averageResolutionTime = completedWorkOrders === 0 ? 0 : Math.max(1, Math.round((workOrdersInProgress + completedWorkOrders) / completedWorkOrders));
-    const vendorPerformance = vendors.filter((vendor) => Number(vendor.rating ?? 0) >= 4).length;
-    const preventiveDue = properties.filter((property) => property.status === "ACTIVE" && property.propertyManagerUserId != null).length;
-
-    return [
-      { label: "Open tickets", value: formatCount(openTickets), change: "Units", tone: openTickets > 0 ? "warning" : "success" },
-      { label: "Emergency tickets", value: formatCount(emergencyTickets), change: "Vendor tagged", tone: emergencyTickets > 0 ? "danger" : "success" },
-      { label: "Work orders in progress", value: formatCount(workOrdersInProgress), change: "Vendor flow", tone: workOrdersInProgress > 0 ? "warning" : "success" },
-      { label: "Completed work orders", value: formatCount(completedWorkOrders), change: "Delivered", tone: "success" },
-      { label: "Average resolution time", value: `${averageResolutionTime} d`, change: "Derived", tone: averageResolutionTime <= 3 ? "success" : "warning" },
-      { label: "Vendor performance", value: formatCount(vendorPerformance), change: "4+ rating", tone: "success" },
-      { label: "Preventive maintenance due", value: formatCount(preventiveDue), change: "Property-linked", tone: preventiveDue > 0 ? "warning" : "success" },
-    ];
-  }, [properties, units, vendors]);
-
-  const unitStatusRows = useMemo(
-    () =>
-      [
-        "AVAILABLE",
-        "RESERVED",
-        "OCCUPIED",
-        "UNDER_MAINTENANCE",
-        "BLOCKED",
-        "INACTIVE",
-      ].map((status) => ({
-        id: status,
-        status,
-        count: units.filter((unit) => unit.unitStatus === status).length,
-      })),
-    [units],
-  );
-
-  const workflowRows = useMemo(
-    () =>
-      toRecordArray(
-        vendors.map((vendor) => ({
-          id: vendor.id,
-          vendorName: vendor.vendorName,
-          serviceCategory: vendor.serviceCategory || "Not set",
-          assignmentStage: vendor.assignmentStage.replaceAll("_", " "),
-          vendorStatus: vendor.vendorStatus,
-        })),
-        6,
-      ),
-    [vendors],
-  );
+  const ownerProperties = data.properties.filter((property) => ownerPropertyIds.includes(property.id));
+  const ownerEntries = currentOwner ? data.accounting.filter((entry) => entry.partyType === "OWNER" && entry.partyId === currentOwner.id) : [];
+  const ownerIncome = ownerEntries.reduce((sum, entry) => sum + entry.creditAmount, 0);
+  const ownerExpenses = data.accounting.filter((entry) => ownerPropertyIds.includes(entry.propertyId ?? "") && entry.accountType === "EXPENSE").reduce((sum, entry) => sum + entry.debitAmount, 0);
+  const ownerUnits = data.units.filter((unit) => ownerPropertyIds.includes(unit.propertyId));
+  const ownerOccupied = ownerUnits.filter((unit) => unit.unitStatus === "OCCUPIED").length;
 
   return (
-    <AppShell
-      title="Operations dashboard"
-      subtitle="Monitor portfolio, leasing, finance, and maintenance using the current live master data and workflow stages configured in this workspace."
-    >
+    <AppShell title="Dashboard" subtitle="Role-aware portfolio, tenant, and owner visibility">
       {error ? <p className="mb-4 rounded-2xl bg-rose-50 px-4 py-3 text-sm text-rose-700">{error}</p> : null}
       {isLoading ? (
         <div className="rounded-[28px] border border-line bg-[color:var(--surface-soft)] px-6 py-10 text-sm text-[color:var(--foreground-muted)]">Loading dashboard...</div>
       ) : (
         <div className="grid gap-6">
-          <SectionCard title="Property Manager Dashboard" eyebrow="Portfolio">
-            <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
-              {propertyManagerMetrics.map((metric) => (
-                <StatCard key={metric.label} {...metric} />
-              ))}
-            </div>
-          </SectionCard>
-
-          <SectionCard title="Leasing Dashboard" eyebrow="Leasing">
-            <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-              {leasingMetrics.map((metric) => (
-                <StatCard key={metric.label} {...metric} />
-              ))}
-            </div>
-          </SectionCard>
-
-          <SectionCard title="Finance Dashboard" eyebrow="Finance">
-            <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-              {financeMetrics.map((metric) => (
-                <StatCard key={metric.label} {...metric} />
-              ))}
-            </div>
-          </SectionCard>
-
-          <SectionCard title="Maintenance Dashboard" eyebrow="Maintenance">
-            <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-              {maintenanceMetrics.map((metric) => (
-                <StatCard key={metric.label} {...metric} />
-              ))}
-            </div>
-          </SectionCard>
-
-          <div className="grid gap-6 xl:grid-cols-[1.1fr_0.9fr]">
-            <SectionCard title="Unit Lifecycle Snapshot" eyebrow="Operational Mix">
-              <DataTable
-                rows={unitStatusRows}
-                columns={[
-                  { key: "status", header: "Unit Status", render: (row) => row.status.replaceAll("_", " ") },
-                  { key: "count", header: "Count" },
-                ]}
-              />
-            </SectionCard>
-
-            <SectionCard title="Vendor Workflow Snapshot" eyebrow="Service Delivery">
-              <DataTable
-                rows={workflowRows}
-                columns={[
-                  { key: "vendorName", header: "Vendor" },
-                  { key: "serviceCategory", header: "Category" },
-                  { key: "assignmentStage", header: "Stage" },
-                  { key: "vendorStatus", header: "Status" },
-                ]}
-              />
-            </SectionCard>
-          </div>
+          {!isTenant && !isOwner ? <AdminDashboard metrics={adminMetrics} invoices={data.invoices} maintenance={data.maintenance} leases={data.leases} approvals={data.approvals} /> : null}
+          {isTenant ? <TenantDashboard lease={currentLease} invoices={tenantInvoices} receipts={tenantReceipts} maintenance={tenantMaintenance} documents={tenantDocuments} notifications={data.notifications} /> : null}
+          {isOwner ? <OwnerDashboard properties={ownerProperties} income={ownerIncome} expenses={ownerExpenses} units={ownerUnits} occupied={ownerOccupied} statement={ownerEntries} /> : null}
         </div>
       )}
     </AppShell>
+  );
+}
+
+function AdminDashboard({ metrics, invoices, maintenance, leases, approvals }: { metrics: Array<{ label: string; value: string; change: string; tone: "success" | "warning" | "danger" }>; invoices: InvoiceRecord[]; maintenance: MaintenanceRequestRecord[]; leases: LeaseRecord[]; approvals: ApprovalRequestRecord[] }) {
+  return (
+    <>
+      <SectionCard title="Admin Dashboard" eyebrow="Portfolio Control"><div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">{metrics.map((metric) => <StatCard key={metric.label} {...metric} />)}</div></SectionCard>
+      <div className="grid gap-6 xl:grid-cols-2">
+        <SectionCard title="Overdue Invoices"><DataTable rows={invoices.filter((item) => item.dueAmount > 0).slice(0, 6)} columns={[{ key: "invoiceNumber", header: "Invoice" }, { key: "tenantDisplayName", header: "Tenant" }, { key: "dueDate", header: "Due" }, { key: "dueAmount", header: "Pending", render: (row) => money(row.dueAmount) }]} /></SectionCard>
+        <SectionCard title="Operational Alerts"><DataTable rows={[...maintenance.filter((item) => isOpen(item.status)).slice(0, 3), ...leases.filter((item) => ["ACTIVE", "APPROVED"].includes(item.status)).slice(0, 3)].map((item, index) => ({ id: `${index}`, type: "requestNumber" in item ? "Maintenance" : "Lease", reference: "requestNumber" in item ? item.requestNumber : item.leaseNumber, status: item.status }))} columns={[{ key: "type", header: "Type" }, { key: "reference", header: "Reference" }, { key: "status", header: "Status" }]} /></SectionCard>
+      </div>
+      <SectionCard title="Pending Approvals"><DataTable rows={approvals.filter((item) => ["PENDING", "RESUBMITTED"].includes(item.status)).slice(0, 8)} columns={[{ key: "referenceNumber", header: "Reference" }, { key: "transactionType", header: "Type", render: (row) => row.transactionType.replaceAll("_", " ") }, { key: "currentLevel", header: "Level" }, { key: "status", header: "Status" }]} /></SectionCard>
+    </>
+  );
+}
+
+function TenantDashboard({ lease, invoices, receipts, maintenance, documents, notifications }: { lease: LeaseRecord | null; invoices: InvoiceRecord[]; receipts: ReceiptRecord[]; maintenance: MaintenanceRequestRecord[]; documents: DocumentRecord[]; notifications: NotificationRecord[] }) {
+  const due = invoices.reduce((sum, invoice) => sum + invoice.dueAmount, 0);
+  return (
+    <>
+      <SectionCard title="Tenant Dashboard" eyebrow="My Account"><div className="grid gap-4 md:grid-cols-3"><StatCard label="Current lease" value={lease?.leaseNumber ?? "No lease"} change={lease?.status ?? "Not active"} tone="success" /><StatCard label="Rent due" value={money(due)} change="Open invoices" tone={due > 0 ? "warning" : "success"} /><StatCard label="Notifications" value={count(notifications.length)} change="Inbox" tone="success" /></div></SectionCard>
+      <div className="grid gap-6 xl:grid-cols-2">
+        <SectionCard title="Payment History"><DataTable rows={receipts.slice(0, 6)} columns={[{ key: "receiptNumber", header: "Receipt" }, { key: "receiptDate", header: "Date" }, { key: "amount", header: "Amount", render: (row) => money(row.amount) }]} /></SectionCard>
+        <SectionCard title="Maintenance Requests"><DataTable rows={maintenance.slice(0, 6)} columns={[{ key: "requestNumber", header: "Request" }, { key: "category", header: "Category" }, { key: "status", header: "Status" }]} /></SectionCard>
+      </div>
+      <SectionCard title="Documents"><DataTable rows={documents.slice(0, 8)} columns={[{ key: "documentTitle", header: "Document" }, { key: "documentType", header: "Type", render: (row) => row.documentType.replaceAll("_", " ") }, { key: "expiryDate", header: "Expiry", render: (row) => row.expiryDate ?? "No expiry" }]} /></SectionCard>
+    </>
+  );
+}
+
+function OwnerDashboard({ properties, income, expenses, units, occupied, statement }: { properties: PropertyRecord[]; income: number; expenses: number; units: UnitRecord[]; occupied: number; statement: AccountingEntryRecord[] }) {
+  const occupancy = units.length ? Math.round((occupied / units.length) * 100) : 0;
+  return (
+    <>
+      <SectionCard title="Owner Dashboard" eyebrow="Owner Statement"><div className="grid gap-4 md:grid-cols-3"><StatCard label="Properties owned" value={count(properties.length)} change="Mapped portfolio" tone="success" /><StatCard label="Rent income" value={money(income)} change="Owner ledger" tone="success" /><StatCard label="Expenses" value={money(expenses)} change="Property expenses" tone={expenses > income ? "danger" : "warning"} /><StatCard label="Net payable" value={money(income - expenses)} change="Income minus expense" tone="success" /><StatCard label="Occupancy" value={`${occupancy}%`} change={`${occupied}/${units.length} units`} tone="success" /></div></SectionCard>
+      <SectionCard title="Owner Statement"><DataTable rows={statement.slice(0, 10)} columns={[{ key: "entryDate", header: "Date" }, { key: "sourceReference", header: "Reference" }, { key: "description", header: "Description" }, { key: "creditAmount", header: "Credit", render: (row) => money(row.creditAmount) }, { key: "debitAmount", header: "Debit", render: (row) => money(row.debitAmount) }]} /></SectionCard>
+    </>
   );
 }

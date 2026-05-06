@@ -801,6 +801,106 @@ export const ownerApi = {
   deleteOwner: (id: string) => api.delete(`/owners/${id}`),
 };
 
+export const documentApi = {
+  getOptions: () => api.get("/documents/options"),
+  getDocuments: () => api.get("/documents"),
+  getExpiringDocuments: (days = 30) => api.get(`/documents/expiring?days=${days}`),
+  downloadDocument: (id: string) => api.get(`/documents/${id}/download`),
+  createDocument: (payload: {
+    documentNumber: string;
+    documentTitle: string;
+    documentType: string;
+    fileName: string;
+    contentType: string;
+    fileSize?: number | null;
+    dataUrl: string;
+    propertyId?: number | null;
+    unitId?: number | null;
+    tenantId?: number | null;
+    leaseId?: number | null;
+    vendorId?: number | null;
+    invoiceId?: number | null;
+    expiryDate?: string | null;
+    previousDocumentId?: number | null;
+    status: string;
+    accessLevel: string;
+    remarks?: string | null;
+  }) => api.post("/documents", payload),
+  updateDocument: (
+    id: string,
+    payload: {
+      documentNumber: string;
+      documentTitle: string;
+      documentType: string;
+      fileName: string;
+      contentType: string;
+      fileSize?: number | null;
+      dataUrl: string;
+      propertyId?: number | null;
+      unitId?: number | null;
+      tenantId?: number | null;
+      leaseId?: number | null;
+      vendorId?: number | null;
+      invoiceId?: number | null;
+      expiryDate?: string | null;
+      previousDocumentId?: number | null;
+      status: string;
+      accessLevel: string;
+      remarks?: string | null;
+    },
+  ) => api.put(`/documents/${id}`, payload),
+  deleteDocument: (id: string) => api.delete(`/documents/${id}`),
+};
+
+export const notificationApi = {
+  getOptions: () => api.get("/notifications/options"),
+  getNotifications: () => api.get("/notifications"),
+  getMyNotifications: () => api.get("/notifications/me"),
+  createNotification: (payload: {
+    recipientUserId?: number | null;
+    recipientName?: string | null;
+    recipientEmail?: string | null;
+    recipientPhone?: string | null;
+    notificationType: string;
+    title: string;
+    message: string;
+    entityType?: string | null;
+    entityId?: number | null;
+    priority: string;
+    channels: string[];
+  }) => api.post("/notifications", payload),
+  markRead: (id: string) => api.post(`/notifications/${id}/read`),
+  runRentDueReminders: (days = 7) => api.post(`/notifications/reminders/rent-due?days=${days}`),
+  runLeaseExpiryReminders: (days = 30) => api.post(`/notifications/reminders/lease-expiry?days=${days}`),
+};
+
+export const approvalApi = {
+  getOptions: () => api.get("/approvals/options"),
+  getConfigs: () => api.get("/approvals/configs"),
+  createConfig: (payload: { transactionType: string; levelNo: number; approverRoleId: number; minAmount?: number | null; maxAmount?: number | null; active: boolean }) =>
+    api.post("/approvals/configs", payload),
+  updateConfig: (id: string, payload: { transactionType: string; levelNo: number; approverRoleId: number; minAmount?: number | null; maxAmount?: number | null; active: boolean }) =>
+    api.put(`/approvals/configs/${id}`, payload),
+  deleteConfig: (id: string) => api.delete(`/approvals/configs/${id}`),
+  getRequests: () => api.get("/approvals/requests"),
+  submitRequest: (payload: { transactionType: string; entityId: number; referenceNumber: string; amount?: number | null; remarks?: string | null }) =>
+    api.post("/approvals/requests", payload),
+  approveRequest: (id: string, payload: { remarks?: string | null }) => api.post(`/approvals/requests/${id}/approve`, payload),
+  rejectRequest: (id: string, payload: { remarks?: string | null }) => api.post(`/approvals/requests/${id}/reject`, payload),
+  resubmitRequest: (id: string, payload: { remarks?: string | null }) => api.post(`/approvals/requests/${id}/resubmit`, payload),
+};
+
+export const accountingApi = {
+  post: () => api.post("/accounting/post"),
+  getEntries: (params?: { accountType?: string; partyType?: string; partyId?: string }) => api.get("/accounting/entries", { params }),
+  getSummary: () => api.get("/accounting/summary"),
+  getReport: (type: string) => api.get(`/accounting/reports/${type}`),
+};
+
+export const auditLogApi = {
+  getAuditLogs: () => api.get("/audit-logs"),
+};
+
 export const agentApi = {
   chat: (payload: {
     message: string;

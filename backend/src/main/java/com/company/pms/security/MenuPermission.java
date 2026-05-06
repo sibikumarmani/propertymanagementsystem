@@ -22,6 +22,11 @@ public final class MenuPermission {
     public static final String ASSETS = "assets";
     public static final String INSPECTIONS = "inspections";
     public static final String PURCHASE_EXPENSES = "purchase-expenses";
+    public static final String DOCUMENTS = "documents";
+    public static final String NOTIFICATIONS = "notifications";
+    public static final String APPROVALS = "approvals";
+    public static final String ACCOUNTING = "accounting";
+    public static final String AUDIT_LOGS = "audit-logs";
     public static final String TENANTS = "tenants";
     public static final String VENDORS = "vendors";
     public static final String OWNERS = "owners";
@@ -44,6 +49,11 @@ public final class MenuPermission {
         ASSETS,
         INSPECTIONS,
         PURCHASE_EXPENSES,
+        DOCUMENTS,
+        NOTIFICATIONS,
+        APPROVALS,
+        ACCOUNTING,
+        AUDIT_LOGS,
         TENANTS,
         VENDORS,
         OWNERS

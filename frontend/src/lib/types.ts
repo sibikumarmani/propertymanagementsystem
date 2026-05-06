@@ -843,3 +843,178 @@ export type AgentActionRecord = {
   success: boolean;
   summary: string;
 };
+
+export type DocumentRecord = {
+  id: string;
+  companyId: string;
+  documentNumber: string;
+  documentTitle: string;
+  documentType: string;
+  fileName: string;
+  contentType: string;
+  fileSize: number | null;
+  dataUrl: string;
+  propertyId: string | null;
+  propertyName: string | null;
+  unitId: string | null;
+  unitNumber: string | null;
+  tenantId: string | null;
+  tenantName: string | null;
+  leaseId: string | null;
+  leaseNumber: string | null;
+  vendorId: string | null;
+  vendorName: string | null;
+  invoiceId: string | null;
+  invoiceNumber: string | null;
+  expiryDate: string | null;
+  versionNumber: number;
+  previousDocumentId: string | null;
+  status: string;
+  accessLevel: string;
+  remarks: string | null;
+  expired: boolean;
+  expiringSoon: boolean;
+};
+
+export type DocumentOptionsRecord = {
+  documentTypes: string[];
+  statuses: string[];
+  accessLevels: string[];
+};
+
+export type NotificationDeliveryRecord = {
+  id: string;
+  channel: string;
+  destination: string | null;
+  status: string;
+  providerMessage: string | null;
+  attemptedAt: string | null;
+};
+
+export type NotificationRecord = {
+  id: string;
+  companyId: string;
+  recipientUserId: string | null;
+  recipientName: string | null;
+  recipientEmail: string | null;
+  recipientPhone: string | null;
+  notificationType: string;
+  title: string;
+  message: string;
+  entityType: string | null;
+  entityId: string | null;
+  priority: string;
+  readAt: string | null;
+  read: boolean;
+  deliveries: NotificationDeliveryRecord[];
+};
+
+export type NotificationOptionsRecord = {
+  notificationTypes: string[];
+  channels: string[];
+  priorities: string[];
+};
+
+export type ApprovalWorkflowConfigRecord = {
+  id: string;
+  companyId: string;
+  transactionType: string;
+  levelNo: number;
+  approverRoleId: string;
+  approverRoleName: string | null;
+  minAmount: number | null;
+  maxAmount: number | null;
+  active: boolean;
+};
+
+export type ApprovalActionRecord = {
+  id: string;
+  levelNo: number;
+  action: string;
+  approverUserId: string | null;
+  approverName: string | null;
+  approverRoleId: string | null;
+  approverRoleName: string | null;
+  remarks: string | null;
+  actionAt: string;
+};
+
+export type ApprovalRequestRecord = {
+  id: string;
+  companyId: string;
+  transactionType: string;
+  entityId: string;
+  referenceNumber: string;
+  amount: number | null;
+  status: string;
+  currentLevel: number;
+  requestedBy: string | null;
+  requesterName: string | null;
+  submittedAt: string;
+  completedAt: string | null;
+  requesterRemarks: string | null;
+  finalRemarks: string | null;
+  history: ApprovalActionRecord[];
+};
+
+export type ApprovalOptionsRecord = {
+  transactionTypes: string[];
+  statuses: string[];
+  actions: string[];
+};
+
+export type AccountingEntryRecord = {
+  id: string;
+  companyId: string;
+  entryDate: string;
+  accountType: string;
+  partyType: string | null;
+  partyId: string | null;
+  partyName: string | null;
+  propertyId: string | null;
+  propertyName: string | null;
+  unitId: string | null;
+  unitNumber: string | null;
+  sourceType: string;
+  sourceId: string;
+  sourceReference: string;
+  description: string | null;
+  debitAmount: number;
+  creditAmount: number;
+  balanceAmount: number;
+  reconciled: boolean;
+};
+
+export type AccountingReportRowRecord = {
+  key: string;
+  label: string;
+  debitAmount: number;
+  creditAmount: number;
+  balanceAmount: number;
+};
+
+export type AccountingSummaryRecord = {
+  rentReceivable: number;
+  advanceReceived: number;
+  securityDepositLiability: number;
+  income: number;
+  expenses: number;
+  taxPayable: number;
+  netProfit: number;
+  propertyProfitAndLoss: AccountingReportRowRecord[];
+};
+
+export type AuditLogRecord = {
+  id: string;
+  companyId: string | null;
+  userId: string | null;
+  userName: string | null;
+  action: string;
+  screen: string;
+  entityType: string | null;
+  entityId: string | null;
+  oldValue: string | null;
+  newValue: string | null;
+  ipAddress: string | null;
+  actionAt: string;
+};

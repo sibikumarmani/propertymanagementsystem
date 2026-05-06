@@ -2,6 +2,8 @@ package com.company.pms.lease;
 
 import com.company.pms.property.PropertyEntity;
 import com.company.pms.property.PropertyRepository;
+import com.company.pms.notification.NotificationService;
+import com.company.pms.audit.AuditLogService;
 import com.company.pms.security.SecurityContextService;
 import com.company.pms.tenant.TenantEntity;
 import com.company.pms.tenant.TenantRepository;
@@ -36,6 +38,8 @@ public class LeaseService {
     private final PropertyRepository propertyRepository;
     private final UnitRepository unitRepository;
     private final SecurityContextService securityContextService;
+    private final NotificationService notificationService;
+    private final AuditLogService auditLogService;
     private final ObjectMapper objectMapper;
 
     public LeaseService(
@@ -45,6 +49,8 @@ public class LeaseService {
         PropertyRepository propertyRepository,
         UnitRepository unitRepository,
         SecurityContextService securityContextService,
+        NotificationService notificationService,
+        AuditLogService auditLogService,
         ObjectMapper objectMapper
     ) {
         this.leaseRepository = leaseRepository;
@@ -53,6 +59,8 @@ public class LeaseService {
         this.propertyRepository = propertyRepository;
         this.unitRepository = unitRepository;
         this.securityContextService = securityContextService;
+        this.notificationService = notificationService;
+        this.auditLogService = auditLogService;
         this.objectMapper = objectMapper;
     }
 
@@ -95,7 +103,9 @@ public class LeaseService {
         PropertyEntity property = requireProperty(unit.getPropertyId(), companyId);
         validateUnitAvailable(companyId, unit.getId(), null);
         LeaseEntity saved = leaseRepository.save(apply(new LeaseEntity(), request, companyId, leaseNumber, property.getId(), normalizeDraftStatus(request.status())));
-        return toDto(saved, tenant, property, unit);
+        LeaseDto dto = toDto(saved, tenant, property, unit);
+        auditLogService.log("Lease created", "Leases", "LEASE", saved.getId(), null, dto);
+        return dto;
     }
 
     @Transactional
@@ -124,7 +134,17 @@ public class LeaseService {
 
     @Transactional
     public LeaseDto approveLease(Long id) {
-        return updateStatus(id, "APPROVED");
+        LeaseDto lease = updateStatus(id, "APPROVED");
+        notificationService.sendWorkflowNotification(
+            lease.companyId(),
+            "APPROVAL_NOTIFICATION",
+            "Lease approved",
+            "Lease %s has been approved.".formatted(lease.leaseNumber()),
+            "LEASE",
+            lease.id(),
+            "NORMAL"
+        );
+        return lease;
     }
 
     @Transactional

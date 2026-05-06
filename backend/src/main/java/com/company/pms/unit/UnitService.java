@@ -9,6 +9,7 @@ import com.company.pms.floor.FloorEntity;
 import com.company.pms.floor.FloorRepository;
 import com.company.pms.property.PropertyEntity;
 import com.company.pms.property.PropertyRepository;
+import com.company.pms.audit.AuditLogService;
 import com.company.pms.security.SecurityContextService;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -55,6 +56,7 @@ public class UnitService {
     private final BuildingRepository buildingRepository;
     private final FloorRepository floorRepository;
     private final SecurityContextService securityContextService;
+    private final AuditLogService auditLogService;
     private final ObjectMapper objectMapper;
 
     public UnitService(
@@ -63,6 +65,7 @@ public class UnitService {
         BuildingRepository buildingRepository,
         FloorRepository floorRepository,
         SecurityContextService securityContextService,
+        AuditLogService auditLogService,
         ObjectMapper objectMapper
     ) {
         this.unitRepository = unitRepository;
@@ -70,6 +73,7 @@ public class UnitService {
         this.buildingRepository = buildingRepository;
         this.floorRepository = floorRepository;
         this.securityContextService = securityContextService;
+        this.auditLogService = auditLogService;
         this.objectMapper = objectMapper;
     }
 
@@ -130,8 +134,13 @@ public class UnitService {
         validateHierarchy(property, building, floor);
         String unitCode = normalizeCode(request.unitCode(), "Unit code");
         validateUnitCode(property.getId(), unitCode, id);
+        String oldStatus = unit.getUnitStatus();
         UnitEntity saved = unitRepository.save(apply(unit, request, companyId, property.getId(), building.getId(), floor.getId(), unitCode));
-        return toDto(saved, property, building, floor);
+        UnitDto dto = toDto(saved, property, building, floor);
+        if (!oldStatus.equals(saved.getUnitStatus())) {
+            auditLogService.log("Unit status changed", "Units", "UNIT", saved.getId(), "status=" + oldStatus, "status=" + saved.getUnitStatus());
+        }
+        return dto;
     }
 
     @Transactional

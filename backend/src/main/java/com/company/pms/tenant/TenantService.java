@@ -5,6 +5,7 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.company.pms.company.CompanyEntity;
 import com.company.pms.company.CompanyRepository;
+import com.company.pms.audit.AuditLogService;
 import com.company.pms.security.SecurityContextService;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -92,17 +93,20 @@ public class TenantService {
     private final TenantRepository tenantRepository;
     private final CompanyRepository companyRepository;
     private final SecurityContextService securityContextService;
+    private final AuditLogService auditLogService;
     private final ObjectMapper objectMapper;
 
     public TenantService(
         TenantRepository tenantRepository,
         CompanyRepository companyRepository,
         SecurityContextService securityContextService,
+        AuditLogService auditLogService,
         ObjectMapper objectMapper
     ) {
         this.tenantRepository = tenantRepository;
         this.companyRepository = companyRepository;
         this.securityContextService = securityContextService;
+        this.auditLogService = auditLogService;
         this.objectMapper = objectMapper;
     }
 
@@ -161,8 +165,11 @@ public class TenantService {
         }
 
         CompanyEntity company = requireCompany(companyId);
+        TenantDto oldDto = toDto(tenant, company);
         TenantEntity saved = tenantRepository.save(apply(tenant, request, companyId, tenantCode));
-        return toDto(saved, company);
+        TenantDto newDto = toDto(saved, company);
+        auditLogService.log("Tenant updated", "Tenants", "TENANT", saved.getId(), oldDto, newDto);
+        return newDto;
     }
 
     @Transactional
