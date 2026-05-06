@@ -15,11 +15,11 @@ SET @tenant_role_id := (SELECT id FROM roles WHERE role_name = 'TENANT');
 SET @owner_role_id := (SELECT id FROM roles WHERE role_name = 'OWNER');
 
 INSERT IGNORE INTO users (user_code, email, phone, password_hash, status, full_name, email_verified) VALUES
-('DEMO-ADMIN', 'admin@demo-pms.local', '+91-90000-10001', '$2a$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy', 'ACTIVE', 'Aarav Demo Admin', TRUE),
-('DEMO-MANAGER', 'manager@demo-pms.local', '+91-90000-10002', '$2a$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy', 'ACTIVE', 'Meera Property Manager', TRUE),
-('DEMO-FINANCE', 'finance@demo-pms.local', '+91-90000-10003', '$2a$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy', 'ACTIVE', 'Rohan Finance User', TRUE),
-('DEMO-TENANT', 'tenant@demo-pms.local', '+91-90000-10004', '$2a$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy', 'ACTIVE', 'Priya Tenant', TRUE),
-('DEMO-OWNER', 'owner@demo-pms.local', '+91-90000-10005', '$2a$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy', 'ACTIVE', 'Vikram Owner', TRUE);
+('DEMO-ADMIN', 'admin@demo-pms.local', '+91-90000-10001', '$2a$10$Kwu8tGuJXAMAqNmh58V2.uoAubXM7ZUUsOZRa0nKgXb07XAX2yVm.', 'ACTIVE', 'Aarav Demo Admin', TRUE),
+('DEMO-MANAGER', 'manager@demo-pms.local', '+91-90000-10002', '$2a$10$Kwu8tGuJXAMAqNmh58V2.uoAubXM7ZUUsOZRa0nKgXb07XAX2yVm.', 'ACTIVE', 'Meera Property Manager', TRUE),
+('DEMO-FINANCE', 'finance@demo-pms.local', '+91-90000-10003', '$2a$10$Kwu8tGuJXAMAqNmh58V2.uoAubXM7ZUUsOZRa0nKgXb07XAX2yVm.', 'ACTIVE', 'Rohan Finance User', TRUE),
+('DEMO-TENANT', 'tenant@demo-pms.local', '+91-90000-10004', '$2a$10$Kwu8tGuJXAMAqNmh58V2.uoAubXM7ZUUsOZRa0nKgXb07XAX2yVm.', 'ACTIVE', 'Priya Tenant', TRUE),
+('DEMO-OWNER', 'owner@demo-pms.local', '+91-90000-10005', '$2a$10$Kwu8tGuJXAMAqNmh58V2.uoAubXM7ZUUsOZRa0nKgXb07XAX2yVm.', 'ACTIVE', 'Vikram Owner', TRUE);
 
 SET @admin_user_id := (SELECT id FROM users WHERE user_code = 'DEMO-ADMIN');
 SET @manager_user_id := (SELECT id FROM users WHERE user_code = 'DEMO-MANAGER');
@@ -104,21 +104,6 @@ SET @unit_a101_id := (SELECT id FROM property_units WHERE property_id = @propert
 SET @unit_a201_id := (SELECT id FROM property_units WHERE property_id = @property_res_id AND unit_code = 'A-201');
 SET @unit_cg01_id := (SELECT id FROM property_units WHERE property_id = @property_com_id AND unit_code = 'C-G01');
 
-INSERT IGNORE INTO leasing_leads (
-    company_id, lead_code, lead_source, lead_status, prospect_name, phone_number, email,
-    assigned_leasing_agent_user_id, assigned_leasing_agent_name, requirement_summary,
-    property_id, unit_id, site_visit_at, visit_feedback, quotation_rent, quotation_deposit,
-    quotation_maintenance_charges, quotation_other_charges, quotation_discount, quotation_notes,
-    quotation_sent_at, application_received_at, screening_notes
-) VALUES (
-    @company_id, 'LEAD-DEMO-001', 'WEBSITE', 'APPLICATION_RECEIVED', 'Neha Sharma',
-    '+91-90000-20001', 'neha.prospect@example.com', @manager_user_id, 'Meera Property Manager',
-    'Looking for a 3BHK apartment with parking and immediate move-in.',
-    @property_res_id, @unit_a201_id, '2026-05-03 11:00:00', 'Liked the unit and requested final quote.',
-    62000.00, 186000.00, 6000.00, 2500.00, 2000.00, 'Introductory discount offered for first month.',
-    '2026-05-03 16:00:00', '2026-05-04 10:30:00', 'Employment and ID documents requested.'
-);
-
 INSERT IGNORE INTO tenants (
     company_id, tenant_code, tenant_type, first_name, last_name, company_name, phone_number,
     email, alternate_phone, date_of_birth_or_registration, id_proof_type, id_proof_number,
@@ -139,22 +124,6 @@ INSERT IGNORE INTO tenants (
 
 SET @tenant_priya_id := (SELECT id FROM tenants WHERE company_id = @company_id AND tenant_code = 'TEN-DEMO-001');
 SET @tenant_cafe_id := (SELECT id FROM tenants WHERE company_id = @company_id AND tenant_code = 'TEN-DEMO-002');
-SET @lead_id := (SELECT id FROM leasing_leads WHERE company_id = @company_id AND lead_code = 'LEAD-DEMO-001');
-
-INSERT IGNORE INTO rental_applications (
-    company_id, application_code, tenant_id, lead_id, unit_id, property_id, occupancy_type,
-    proposed_move_in_date, lease_term_months, adult_occupants_count, child_occupants_count,
-    pet_details, occupancy_notes, document_summary, kyc_verified, employment_verified,
-    income_verified, reference_checked, previous_landlord_checked, company_approval_verified,
-    document_completeness_checked, internal_blacklist_checked, verification_notes,
-    application_status, approved_at, lease_draft_reference, lease_draft_generated_at
-) VALUES (
-    @company_id, 'APP-DEMO-001', @tenant_priya_id, @lead_id, @unit_a101_id, @property_res_id,
-    'RESIDENTIAL', '2026-01-01', 12, 2, 0, 'No pets', 'Primary residence',
-    'KYC, address proof, and income documents completed.', TRUE, TRUE, TRUE, TRUE, TRUE, TRUE,
-    TRUE, TRUE, 'Approved after standard checks.', 'APPROVED', '2025-12-20 15:00:00',
-    'LEASE-DEMO-001', '2025-12-21 10:00:00'
-);
 
 INSERT IGNORE INTO vendors (
     company_id, vendor_code, vendor_name, contact_person, phone, email, address, service_category,

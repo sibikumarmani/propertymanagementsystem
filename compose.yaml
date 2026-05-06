@@ -66,5 +66,4 @@ services:
 
 volumes:
   mysql_data:
-    external: true
-    name: propertymanagementsystem_mysql_data
+    
