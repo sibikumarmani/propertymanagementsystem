@@ -19,12 +19,124 @@ Your job is to create property-management records by using the provided tools.
 
 Rules:
 - Use tools whenever the user is asking to create, prepare, register, add, log, or seed property-management data.
-- Never invent numeric IDs. If you need an existing role, user, company, branch, property, unit, tenant, owner, or vendor, first call a listing tool.
+- You can add data for all supported modules: roles, users, companies, branches, properties, buildings, floors, units, tenants, leases, rent schedules, invoices, receipts, security deposits, maintenance requests, work orders, preventive maintenance, utilities, assets, inspections, purchase and expense records, vendors, owners, documents, notifications, and approval configs.
+- Never invent numeric IDs. If you need an existing linked record, first call a listing tool or list_records for the related entity type.
 - Create only the records the user asked for.
 - If required information is missing, stop and ask a concise follow-up question instead of guessing.
 - Keep passwords explicit only when the user provided one. If the user did not provide a password for a new user, ask for it.
-- Prefer creating linked records in the correct order: company, branch, property, unit, then tenant or owner.
+- Prefer creating linked records in the correct order: company, branch, property, building, floor, unit, then tenant, lease, billing, maintenance, utilities, inspections, assets, purchase/expense, documents, notifications, or owner records.
+- For any module without a dedicated create_* tool, use create_record with the correct entityType and JSON payload. Required fields are the same as the application form/API names.
 - After tool execution, summarize exactly what was created and mention any remaining gaps.
+""".strip()
+
+
+LIST_ENDPOINTS: dict[str, str] = {
+    "roles": "/roles",
+    "users": "/users",
+    "companies": "/companies",
+    "branches": "/branches",
+    "properties": "/properties",
+    "buildings": "/buildings",
+    "floors": "/floors",
+    "units": "/units",
+    "tenants": "/tenants",
+    "leases": "/leases",
+    "rent_schedules": "/rent-billing/schedules",
+    "rent_invoices": "/rent-billing/invoices",
+    "rent_receipts": "/rent-billing/receipts",
+    "security_deposits": "/rent-billing/security-deposits",
+    "maintenance_requests": "/maintenance/requests",
+    "maintenance_work_orders": "/maintenance/work-orders",
+    "preventive_maintenance": "/maintenance/preventive",
+    "utility_types": "/utilities/types",
+    "utility_readings": "/utilities/readings",
+    "utility_bills": "/utilities/bills",
+    "assets": "/assets",
+    "asset_maintenance_schedules": "/assets/maintenance-schedules",
+    "asset_service_history": "/assets/service-history",
+    "inspections": "/inspections",
+    "purchase_requests": "/purchase-expenses/requests",
+    "purchase_orders": "/purchase-expenses/orders",
+    "purchase_invoices": "/purchase-expenses/invoices",
+    "expenses": "/purchase-expenses/expenses",
+    "vendors": "/vendors",
+    "owners": "/owners",
+    "documents": "/documents",
+    "notifications": "/notifications",
+    "approval_configs": "/approvals/configs",
+}
+
+CREATE_ENDPOINTS: dict[str, str] = {
+    "role": "/roles",
+    "user": "/users",
+    "company": "/companies",
+    "branch": "/branches",
+    "property": "/properties",
+    "building": "/buildings",
+    "floor": "/floors",
+    "unit": "/units",
+    "tenant": "/tenants",
+    "lease": "/leases",
+    "rent_schedule": "/rent-billing/schedules/generate",
+    "rent_invoice": "/rent-billing/invoices",
+    "rent_receipt": "/rent-billing/receipts",
+    "security_deposit": "/rent-billing/security-deposits",
+    "maintenance_request": "/maintenance/requests",
+    "maintenance_work_order": "/maintenance/work-orders",
+    "preventive_maintenance": "/maintenance/preventive",
+    "utility_type": "/utilities/types",
+    "utility_reading": "/utilities/readings",
+    "utility_bill": "/utilities/bills",
+    "asset": "/assets",
+    "asset_maintenance_schedule": "/assets/maintenance-schedules",
+    "asset_service_history": "/assets/service-history",
+    "inspection": "/inspections",
+    "purchase_request": "/purchase-expenses/requests",
+    "purchase_order": "/purchase-expenses/orders",
+    "purchase_invoice": "/purchase-expenses/invoices",
+    "expense": "/purchase-expenses/expenses",
+    "vendor": "/vendors",
+    "owner": "/owners",
+    "document": "/documents",
+    "notification": "/notifications",
+    "approval_config": "/approvals/configs",
+}
+
+CREATE_ENTITY_HELP = """
+Supported create_record entityType values and important payload fields:
+- role: roleName, description, defaultRole, status, menuAccessKeys
+- user: fullName, email, phone, password, status, emailVerified, roleIds, companyIds, defaultCompanyId, menuAccessOverrides
+- company: companyName, companyCode, email, phone, address, city, state, country, postalCode, gstNumber, taxNumber, defaultCompany, status
+- branch: companyId, branchName, branchCode, address, city, state, country, postalCode, status
+- property: branchId, propertyCode, propertyName, propertyType, ownershipType, ownerReference, ownershipDetails, address, city, state, country, pincode, totalFloors, totalUnits, propertyManagerUserId, amenitiesSummary, status
+- building: propertyId, buildingCode, buildingName, numberOfFloors, amenitiesSummary, description, status
+- floor: buildingId, floorCode, floorName, floorNumber, status
+- unit: propertyId, buildingId, floorId, unitCode, unitNumber, unitType, areaValue, areaUnit, baseRent, securityDepositAmount, unitStatus, availabilityDate
+- tenant: tenantCode, tenantType, firstName, lastName, companyName, phoneNumber, email, kycStatus, blacklistStatus, tenantStatus, kycStage
+- lease: leaseNumber, tenantId, unitId, leaseStartDate, leaseEndDate, rentAmount, securityDepositAmount, billingCycle, dueDay, status
+- rent_schedule: leaseId, fromDate, toDate, lateFeeAmount
+- rent_invoice: invoiceNumber, invoiceType, leaseId, rentScheduleId, tenantId, propertyId, unitId, invoiceDate, dueDate, subtotalAmount, taxAmount, discountAmount, lateFeeAmount, status, description
+- rent_receipt: receiptNumber, invoiceId, tenantId, receiptDate, paymentMode, amount, referenceNumber, remarks
+- security_deposit: leaseId, depositNumber, remarks
+- maintenance_request: requestNumber, tenantId, propertyId, unitId, category, priority, description, assignedVendorId, assignedUserId, estimatedCost, actualCost, status, approvalStatus, completionRemarks
+- maintenance_work_order: workOrderNumber, maintenanceRequestId, vendorId, technicianUserId, materialsUsed, laborCharges, completionRemarks, approvalStatus, status
+- preventive_maintenance: scheduleNumber, propertyId, unitId, assetName, maintenanceType, recurrenceFrequency, nextDueDate, responsibleUserId, vendorId, notifyBeforeDays, completionStatus, lastCompletedDate, completionRemarks, status
+- utility_type: typeCode, typeName, category, billingMethod, unitOfMeasure, defaultRate, fixedCharge, commonArea, status, description
+- utility_reading: readingNumber, utilityTypeId, propertyId, unitId, tenantId, meterNumber, readingDate, previousReading, currentReading, commonArea, status, remarks
+- utility_bill: billNumber, utilityTypeId, meterReadingId, tenantId, propertyId, unitId, billDate, dueDate, billingPeriodStart, billingPeriodEnd, billingMethod, consumption, rate, fixedCharge, commonAreaAmount, taxAmount, paidAmount, status, remarks
+- asset: assetCode, assetName, assetCategory, propertyId, buildingId, unitId, serialNumber, manufacturer, modelNumber, purchaseDate, purchaseCost, installationDate, conditionStatus, warrantyProvider, warrantyStartDate, warrantyEndDate, warrantyTerms, maintenanceFrequency, nextMaintenanceDate, status, remarks
+- asset_maintenance_schedule: scheduleNumber, assetId, maintenanceType, frequency, plannedDate, assignedVendorId, estimatedCost, priority, status, remarks
+- asset_service_history: serviceNumber, assetId, maintenanceScheduleId, serviceDate, serviceType, vendorId, technicianName, conditionBefore, conditionAfter, workPerformed, partsReplaced, serviceCost, nextServiceDate, status, remarks
+- inspection: inspectionNumber, inspectionType, propertyId, unitId, leaseId, tenantId, scheduledDate, inspectionDate, inspectorName, overallCondition, damageStatus, estimatedRepairCost, checklist, damageNotes, tenantAcknowledgementStatus, tenantAcknowledgedBy, status, remarks
+- purchase_request: requestNumber, propertyId, unitId, expenseType, description, estimatedAmount, status, approvalStatus
+- purchase_order: purchaseOrderNumber, purchaseRequestId, vendorId, propertyId, unitId, orderDate, expectedDeliveryDate, totalAmount, status, approvalStatus, remarks
+- purchase_invoice: invoiceNumber, purchaseOrderId, vendorId, propertyId, unitId, invoiceDate, dueDate, invoiceAmount, paidAmount, paymentStatus, approvalStatus, status, remarks
+- expense: expenseNumber, vendorInvoiceId, vendorId, propertyId, unitId, expenseDate, expenseType, amount, description, approvalStatus, paymentStatus, status
+- vendor: vendorCode, vendorName, contactPerson, phone, email, address, serviceCategory, taxNumber, bankDetails, contractStatus, insuranceDetails, rating, vendorStatus, assignmentStage
+- owner: ownerCode, ownerName, phone, email, address, taxDetails, bankAccountDetails, propertyIds, ownershipPercentage, payoutFrequency, statementPreference, ownerStatus, statementStage
+- document: documentNumber, documentTitle, documentType, fileName, contentType, fileSize, dataUrl, propertyId, unitId, tenantId, leaseId, vendorId, invoiceId, expiryDate, previousDocumentId, status, accessLevel, remarks
+- notification: recipientUserId, recipientName, recipientEmail, recipientPhone, notificationType, title, message, entityType, entityId, priority, channels
+- approval_config: transactionType, levelNo, approverRoleId, minAmount, maxAmount, active
 """.strip()
 
 
@@ -100,6 +212,36 @@ def tool_definitions() -> list[dict[str, Any]]:
         }
 
     return [
+        function_tool(
+            "list_records",
+            "List existing records for any supported module so you can resolve IDs before creating linked data.",
+            schema(
+                {
+                    "entityType": {
+                        "type": "string",
+                        "enum": sorted(LIST_ENDPOINTS.keys()),
+                    },
+                },
+                ["entityType"],
+            ),
+        ),
+        function_tool(
+            "create_record",
+            f"Create a record in any supported module. {CREATE_ENTITY_HELP}",
+            schema(
+                {
+                    "entityType": {
+                        "type": "string",
+                        "enum": sorted(CREATE_ENDPOINTS.keys()),
+                    },
+                    "payload": {
+                        "type": "object",
+                        "description": "JSON request body using the same field names as the application API.",
+                    },
+                },
+                ["entityType", "payload"],
+            ),
+        ),
         function_tool("list_roles", "List roles so you can resolve valid role IDs.", schema({}, [])),
         function_tool("list_users", "List users so you can resolve manager or assignee IDs.", schema({}, [])),
         function_tool("list_companies", "List companies so you can resolve company IDs.", schema({}, [])),
@@ -166,23 +308,13 @@ def tool_definitions() -> list[dict[str, Any]]:
                     "state": {"type": ["string", "null"]},
                     "country": {"type": ["string", "null"]},
                     "pincode": {"type": ["string", "null"]},
-                    "latitude": {"type": ["number", "null"]},
-                    "longitude": {"type": ["number", "null"]},
-                    "totalLandArea": {"type": ["number", "null"]},
-                    "builtUpArea": {"type": ["number", "null"]},
-                    "numberOfFloors": {"type": ["integer", "null"]},
-                    "numberOfUnits": {"type": ["integer", "null"]},
-                    "parkingAvailable": {"type": "boolean"},
+                    "totalFloors": {"type": ["integer", "null"]},
+                    "totalUnits": {"type": ["integer", "null"]},
                     "propertyManagerUserId": {"type": ["integer", "null"]},
-                    "maintenanceManagerUserId": {"type": ["integer", "null"]},
                     "amenitiesSummary": {"type": ["string", "null"]},
-                    "facilitiesSummary": {"type": ["string", "null"]},
-                    "blockConfiguration": {"type": ["string", "null"]},
-                    "unitConfiguration": {"type": ["string", "null"]},
-                    "documentSummary": {"type": ["string", "null"]},
                     "status": {"type": "string"},
                 },
-                ["propertyCode", "propertyName", "propertyType", "ownershipType", "parkingAvailable", "status"],
+                ["propertyCode", "propertyName", "propertyType", "ownershipType", "status"],
             ),
         ),
         function_tool(
@@ -191,29 +323,19 @@ def tool_definitions() -> list[dict[str, Any]]:
             schema(
                 {
                     "propertyId": {"type": "integer"},
+                    "buildingId": {"type": "integer"},
+                    "floorId": {"type": "integer"},
                     "unitCode": {"type": "string"},
-                    "blockName": {"type": ["string", "null"]},
-                    "floorName": {"type": ["string", "null"]},
                     "unitNumber": {"type": "string"},
                     "unitType": {"type": "string"},
-                    "bedroomCount": {"type": ["integer", "null"]},
-                    "bathroomCount": {"type": ["integer", "null"]},
-                    "areaSqft": {"type": ["number", "null"]},
-                    "furnishingType": {"type": ["string", "null"]},
-                    "parkingCount": {"type": ["integer", "null"]},
+                    "areaValue": {"type": ["number", "null"]},
+                    "areaUnit": {"type": "string"},
                     "baseRent": {"type": ["number", "null"]},
                     "securityDepositAmount": {"type": ["number", "null"]},
-                    "maintenanceCharge": {"type": ["number", "null"]},
-                    "utilityCharge": {"type": ["number", "null"]},
-                    "taxApplicable": {"type": "boolean"},
                     "unitStatus": {"type": "string"},
-                    "marketRent": {"type": ["number", "null"]},
-                    "minimumRent": {"type": ["number", "null"]},
                     "availabilityDate": {"type": ["string", "null"]},
-                    "photoSummary": {"type": ["string", "null"]},
-                    "documentSummary": {"type": ["string", "null"]},
                 },
-                ["propertyId", "unitCode", "unitNumber", "unitType", "taxApplicable", "unitStatus"],
+                ["propertyId", "buildingId", "floorId", "unitCode", "unitNumber", "unitType", "areaUnit", "unitStatus"],
             ),
         ),
         function_tool(
@@ -365,6 +487,52 @@ def backend_request(
 
 
 def summarize_success(tool_name: str, result: Any, arguments: dict[str, Any]) -> str:
+    if tool_name == "create_record":
+        entity_type = arguments.get("entityType", "record")
+        payload = arguments.get("payload") or {}
+        if isinstance(result, list):
+            return f"Created {len(result)} {entity_type.replace('_', ' ')} records"
+        result_payload = result if isinstance(result, dict) else {}
+        reference = (
+            result_payload.get("code")
+            or result_payload.get("companyCode")
+            or result_payload.get("branchCode")
+            or result_payload.get("propertyCode")
+            or result_payload.get("buildingCode")
+            or result_payload.get("floorCode")
+            or result_payload.get("unitCode")
+            or result_payload.get("tenantCode")
+            or result_payload.get("leaseNumber")
+            or result_payload.get("invoiceNumber")
+            or result_payload.get("receiptNumber")
+            or result_payload.get("requestNumber")
+            or result_payload.get("workOrderNumber")
+            or result_payload.get("scheduleNumber")
+            or result_payload.get("typeCode")
+            or result_payload.get("billNumber")
+            or result_payload.get("assetCode")
+            or result_payload.get("serviceNumber")
+            or result_payload.get("inspectionNumber")
+            or result_payload.get("purchaseOrderNumber")
+            or result_payload.get("expenseNumber")
+            or result_payload.get("vendorCode")
+            or result_payload.get("ownerCode")
+            or result_payload.get("documentNumber")
+            or payload.get("companyCode")
+            or payload.get("propertyCode")
+            or payload.get("unitCode")
+            or payload.get("leaseNumber")
+            or payload.get("invoiceNumber")
+            or payload.get("requestNumber")
+            or result_payload.get("id")
+            or "-"
+        )
+        return f"Created {entity_type.replace('_', ' ')} {reference}"
+    if tool_name == "list_records":
+        entity_type = arguments.get("entityType", "records")
+        if isinstance(result, list):
+            return f"Returned {len(result)} {entity_type.replace('_', ' ')} records"
+        return f"Returned {entity_type.replace('_', ' ')} records"
     if tool_name == "create_company":
         return f"Created company {result.get('companyCode') or arguments.get('companyCode') or '-'} ({result.get('companyName') or arguments['companyName']})"
     if tool_name == "create_branch":
@@ -388,7 +556,22 @@ def summarize_success(tool_name: str, result: Any, arguments: dict[str, Any]) ->
 
 def execute_tool(tool_name: str, arguments: dict[str, Any], authorization: str | None) -> tuple[bool, str, Any]:
     try:
-        if tool_name == "list_roles":
+        if tool_name == "list_records":
+            entity_type = arguments.get("entityType")
+            path = LIST_ENDPOINTS.get(entity_type)
+            if path is None:
+                raise HTTPException(status_code=400, detail=f"Unsupported list entity type: {entity_type}")
+            result = backend_request("GET", path, authorization)
+        elif tool_name == "create_record":
+            entity_type = arguments.get("entityType")
+            path = CREATE_ENDPOINTS.get(entity_type)
+            if path is None:
+                raise HTTPException(status_code=400, detail=f"Unsupported create entity type: {entity_type}")
+            payload = arguments.get("payload")
+            if not isinstance(payload, dict):
+                raise HTTPException(status_code=400, detail="create_record payload must be an object")
+            result = backend_request("POST", path, authorization, payload)
+        elif tool_name == "list_roles":
             result = backend_request("GET", "/roles", authorization)
         elif tool_name == "list_users":
             result = backend_request("GET", "/users", authorization)
@@ -444,6 +627,20 @@ def execute_tool(tool_name: str, arguments: dict[str, Any], authorization: str |
         return False, str(exc.detail), error_payload
 
 
+def agent_provider_failure_message(detail: Any) -> str:
+    text = str(detail or "").strip()
+    if "Insufficient credits" in text or "code': 402" in text or '"code":402' in text:
+        return (
+            "The chatbot provider rejected the request because the configured OpenRouter account has insufficient credits. "
+            "Add credits in OpenRouter or configure a different OPENROUTER_API_KEY/OPENROUTER_MODEL, then try again."
+        )
+    if "OPENROUTER_API_KEY is not configured" in text:
+        return "The chatbot provider is not configured. Set OPENROUTER_API_KEY for the agent service, then restart the application."
+    if text:
+        return f"The chatbot provider could not complete the request: {text}"
+    return "The chatbot provider could not complete the request. Check the agent service configuration and try again."
+
+
 async def openrouter_completion(messages: list[dict[str, Any]]) -> dict[str, Any]:
     payload = {
         "model": openrouter_model(),
@@ -477,7 +674,10 @@ async def openrouter_completion(messages: list[dict[str, Any]]) -> dict[str, Any
 async def chat(request: AgentChatRequest, authorization: str | None = Header(default=None)) -> AgentChatResponse:
     messages = build_messages(request)
     actions: list[AgentActionResult] = []
-    response = await openrouter_completion(messages)
+    try:
+        response = await openrouter_completion(messages)
+    except HTTPException as exc:
+        return AgentChatResponse(message=agent_provider_failure_message(exc.detail), model=openrouter_model(), actions=actions)
 
     for _ in range(MAX_TOOL_ROUNDS):
         assistant_message = response.get("choices", [{}])[0].get("message", {})
@@ -510,7 +710,9 @@ async def chat(request: AgentChatRequest, authorization: str | None = Header(def
                 }
             )
 
-        response = await openrouter_completion(messages)
+        try:
+            response = await openrouter_completion(messages)
+        except HTTPException as exc:
+            return AgentChatResponse(message=agent_provider_failure_message(exc.detail), model=openrouter_model(), actions=actions)
 
     raise HTTPException(status_code=502, detail="Chatbot agent reached the maximum tool-call loop without producing a final response")
-

@@ -905,5 +905,5 @@ export const agentApi = {
   chat: (payload: {
     message: string;
     history?: Array<{ role: string; content: string }>;
-  }) => api.post("/agent/chat", payload),
+  }) => api.post("/agent/chat", payload, { timeout: 120_000 }),
 };

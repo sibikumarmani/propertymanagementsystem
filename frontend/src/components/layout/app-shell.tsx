@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import type { ReactNode } from "react";
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Sparkles } from "lucide-react";
 import { useIsClient } from "@/hooks/use-is-client";
 import { accountApi } from "@/lib/api";
@@ -11,7 +11,7 @@ import { getMenuKeyForPath, hasAdminRole, hasMenuAccess } from "@/lib/access";
 import { navigationGroups } from "@/lib/navigation";
 import { useAppStore } from "@/store/app-store";
 import { LayoutWrapper } from "@/components/layout/layout-wrapper";
-import { MenuBar } from "@/components/layout/menu-bar";
+import { Sidebar } from "@/components/layout/sidebar";
 import { TopBar } from "@/components/layout/top-bar";
 
 type AppShellProps = {
@@ -25,6 +25,7 @@ export function AppShell({ title, subtitle, children }: AppShellProps) {
   const pathname = usePathname();
   const { accessToken, hasHydrated, user, clearAuth, updateUser, pendingCompanySelectionToken } = useAppStore();
   const isClient = useIsClient();
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const isAdminUser = hasAdminRole(user?.roles);
   const currentMenuKey = getMenuKeyForPath(pathname);
   const hasResolvedMenuAccess = Array.isArray(user?.menuAccessKeys);
@@ -119,43 +120,50 @@ export function AppShell({ title, subtitle, children }: AppShellProps) {
 
   return (
     <div className="min-h-screen">
-      <div className="fixed inset-x-0 top-0 z-40 overflow-visible">
-        <TopBar
-          appName="Property Management Administration"
-          avatarLabel={userInitials}
-          userName={user?.fullName ?? "User"}
-          userEmail={user?.email ?? ""}
-          userCode={user?.userCode ?? ""}
-          avatarImage={user?.avatarImage ?? null}
-          userRole={[...(user?.roles ?? []), user?.activeCompany?.companyName].filter(Boolean).join(" • ") || user?.email || "Member"}
-          onProfileSave={async ({ fullName, avatarImage }) => {
-            const response = await accountApi.updateProfile({ fullName, avatarImage });
-            const profile = response.data.data;
-            updateUser({
-              fullName: profile.fullName,
-              userCode: profile.userCode,
-              email: profile.email,
-              phone: profile.phone,
-              roles: profile.roles,
-              menuAccessKeys: profile.menuAccessKeys,
-              activeCompany: profile.activeCompany,
-              avatarImage: profile.avatarImage,
-            });
-          }}
-          onPasswordChange={async ({ currentPassword, newPassword }) => {
-            await accountApi.changePassword({ currentPassword, newPassword });
-          }}
-          onLogout={() => {
-            clearAuth();
-            router.replace("/login");
-          }}
-        />
-        <MenuBar key={pathname} groups={visibleNavigationGroups} />
-      </div>
+      <Sidebar
+        groups={visibleNavigationGroups}
+        collapsed={sidebarCollapsed}
+        onToggleCollapse={() => setSidebarCollapsed((c) => !c)}
+      />
 
-      <LayoutWrapper title={title} subtitle={subtitle}>
-        {children}
-      </LayoutWrapper>
+      <div className="transition-all duration-300" style={{ marginLeft: sidebarCollapsed ? 64 : 260 }}>
+        <div className="fixed top-0 right-0 z-40 transition-all duration-300" style={{ left: sidebarCollapsed ? 64 : 260 }}>
+          <TopBar
+            appName="Property Management Administration"
+            avatarLabel={userInitials}
+            userName={user?.fullName ?? "User"}
+            userEmail={user?.email ?? ""}
+            userCode={user?.userCode ?? ""}
+            avatarImage={user?.avatarImage ?? null}
+            userRole={[...(user?.roles ?? []), user?.activeCompany?.companyName].filter(Boolean).join(" • ") || user?.email || "Member"}
+            onProfileSave={async ({ fullName, avatarImage }) => {
+              const response = await accountApi.updateProfile({ fullName, avatarImage });
+              const profile = response.data.data;
+              updateUser({
+                fullName: profile.fullName,
+                userCode: profile.userCode,
+                email: profile.email,
+                phone: profile.phone,
+                roles: profile.roles,
+                menuAccessKeys: profile.menuAccessKeys,
+                activeCompany: profile.activeCompany,
+                avatarImage: profile.avatarImage,
+              });
+            }}
+            onPasswordChange={async ({ currentPassword, newPassword }) => {
+              await accountApi.changePassword({ currentPassword, newPassword });
+            }}
+            onLogout={() => {
+              clearAuth();
+              router.replace("/login");
+            }}
+          />
+        </div>
+
+        <LayoutWrapper title={title} subtitle={subtitle}>
+          {children}
+        </LayoutWrapper>
+      </div>
 
       <Link
         href="/agent"
